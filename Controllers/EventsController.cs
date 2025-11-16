@@ -20,9 +20,14 @@ public class EventsController : ControllerBase
     }
 
     /// <summary>
-    /// იღებს ნებისმიერ გარე JSON Event-ს.
-    /// Header: X-Provider ან query: ?provider=...
+    /// Accepts any external JSON event and processes it.
     /// </summary>
+    /// <remarks>
+    /// Required internal fields after mapping: ActorId, Amount, OccurredAt.<br/>
+    /// Provide raw JSON body. Mapping rules are applied automatically.
+    /// </remarks>
+    /// <response code="200">Event ingested successfully.</response>
+    /// <response code="400">Invalid JSON or failed validation.</response>
     [HttpPost]
     public async Task<IActionResult> Post([FromBody] object body, CancellationToken ct)
     {

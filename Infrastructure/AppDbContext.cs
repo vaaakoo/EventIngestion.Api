@@ -13,6 +13,7 @@ public class AppDbContext : DbContext
     {
     }
 
+    // Fluent API Entity Configuration
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<RawEvent>(entity =>

@@ -15,6 +15,12 @@ public class MappingRulesController : ControllerBase
         _repo = repo;
     }
 
+    /// <summary>
+    /// Returns all current mapping rules.
+    /// </summary>
+    /// <remarks>
+    /// Mapping rules convert external field names into internal field names.
+    /// </remarks>
     [HttpGet]
     public async Task<IActionResult> GetAll(CancellationToken ct)
     {
@@ -27,6 +33,14 @@ public class MappingRulesController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// Adds or updates a mapping rule.
+    /// </summary>
+    /// <remarks>
+    /// Example: {"externalName":"usr","internalName":"ActorId"}.
+    /// </remarks>
+    /// <response code="200">Rule saved.</response>
+    /// <response code="400">Invalid request body.</response>
     [HttpPost]
     public async Task<IActionResult> AddOrUpdate([FromBody] MappingRuleDto dto, CancellationToken ct)
     {
@@ -37,6 +51,10 @@ public class MappingRulesController : ControllerBase
         return Ok(new { Success = true });
     }
 
+    /// <summary>
+    /// Removes a mapping rule by external field name.
+    /// </summary>
+    /// <response code="200">Rule removed.</response>
     [HttpDelete("{externalName}")]
     public async Task<IActionResult> Delete(string externalName, CancellationToken ct)
     {

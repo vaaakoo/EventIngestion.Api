@@ -13,8 +13,11 @@ public class EventIngestionService : IEventIngestionService
     private readonly IEventPublisher _publisher;
     private readonly ILogger<EventIngestionService> _logger;
 
-    public EventIngestionService(AppDbContext db, IMappingRuleRepository mappingRepo,
-        IEventPublisher publisher, ILogger<EventIngestionService> logger)
+    public EventIngestionService(
+        AppDbContext db,
+        IMappingRuleRepository mappingRepo,
+        IEventPublisher publisher,
+        ILogger<EventIngestionService> logger)
     {
         _db = db;
         _mappingRepo = mappingRepo;
@@ -22,121 +25,28 @@ public class EventIngestionService : IEventIngestionService
         _logger = logger;
     }
 
-    public async Task<(bool Success, string? Error)> IngestExternalEventAsync(
-        JObject externalJson,
-        CancellationToken ct = default)
+    public async Task<(bool Success, string? Error)> IngestExternalEventAsync(JObject externalJson, CancellationToken ct = default)
     {
-        var raw = new RawEvent
-        {
-            ReceivedAt = DateTime.UtcNow,
-            RawPayload = externalJson.ToString(Formatting.None),
-            Status = 0
-        };
-
-        _db.RawEvents.Add(raw);
-        await _db.SaveChangesAsync(ct);
+        // Step 1 — Save RAW event
+        var raw = await SaveRawEventAsync(externalJson, ct);
 
         try
         {
-            var rules = await _mappingRepo.GetAllAsync(ct);
-            var ruleDict = rules.ToDictionary(r => r.ExternalName, r => r.InternalName,
-                StringComparer.OrdinalIgnoreCase);
+            // Step 2 — Load mapping rules
+            var ruleDict = await LoadMappingDictionaryAsync(ct);
 
-            var mappedDict = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            // Step 3 — Convert external -> internal model
+            var mapped = MapExternalToInternalDictionary(externalJson, ruleDict);
 
-            foreach (var prop in externalJson.Properties())
-            {
-                var externalName = prop.Name;
-                var value = prop.Value?.ToObject<object?>();
+            // Step 4 — Validate + convert required fields
+            var internalEvent = BuildInternalEvent(mapped);
 
-                if (ruleDict.TryGetValue(externalName, out var internalName))
-                    mappedDict[internalName] = value;
-                else
-                {
-                    var internalDefault = char.ToUpper(externalName[0]) + externalName.Substring(1);
-                    mappedDict[internalDefault] = value;
-                }
-            }
+            // Step 5 — Save mapped event
+            var mappedEvent = await SaveMappedEventAsync(raw.Id, internalEvent, ct);
 
-            // Required
-            if (!mappedDict.TryGetValue("ActorId", out var actorObj)
-                || string.IsNullOrWhiteSpace(actorObj?.ToString()))
-                throw new Exception("Missing required internal field: ActorId");
+            // Step 6 — Try publish to RabbitMQ
+            await TryPublishAsync(internalEvent, raw, mappedEvent, ct);
 
-            if (!mappedDict.TryGetValue("Amount", out var amountObj))
-                throw new Exception("Missing required internal field: Amount");
-
-            if (!mappedDict.TryGetValue("OccurredAt", out var occuredObj))
-                throw new Exception("Missing required internal field: OccurredAt");
-
-            // Conversions
-            var actorId = actorObj!.ToString()!;
-            if (!decimal.TryParse(amountObj.ToString(), NumberStyles.Any,
-                CultureInfo.InvariantCulture, out var amount))
-                throw new Exception("Amount is not a valid decimal");
-
-            if (!DateTime.TryParse(occuredObj.ToString(), CultureInfo.InvariantCulture,
-                DateTimeStyles.AdjustToUniversal, out var occurredAt))
-                throw new Exception("OccurredAt is not a valid datetime");
-
-            var currency = mappedDict.TryGetValue("Currency", out var currencyObj)
-                ? currencyObj?.ToString() ?? "GEL"
-                : "GEL";
-
-            var eventType = mappedDict.TryGetValue("EventType", out var typeObj)
-                ? typeObj?.ToString()
-                : null;
-
-            var internalEvent = new InternalEvent
-            {
-                ActorId = actorId,
-                Amount = amount,
-                Currency = currency,
-                OccurredAt = occurredAt,
-                EventType = eventType
-            };
-
-            foreach (var kv in mappedDict)
-            {
-                if (kv.Key is "ActorId" or "Amount" or "Currency" or "OccurredAt" or "EventType")
-                    continue;
-
-                internalEvent.ExtraFields[kv.Key] = kv.Value;
-            }
-
-            var mappedEvent = new MappedEvent
-            {
-                RawEventId = raw.Id,
-                ActorId = actorId,
-                Amount = amount,
-                Currency = currency,
-                EventType = eventType,
-                OccurredAt = occurredAt,
-                Payload = JsonConvert.SerializeObject(internalEvent),
-                PublishStatus = 0,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _db.MappedEvents.Add(mappedEvent);
-            await _db.SaveChangesAsync(ct);
-
-            try
-            {
-                await _publisher.PublishAsync(internalEvent, ct);
-                mappedEvent.PublishStatus = 1;
-                raw.Status = 1;
-            }
-            catch (Exception ex)
-            {
-                mappedEvent.PublishStatus = 2;
-                mappedEvent.FailureReason = ex.Message;
-                raw.Status = 2;
-                raw.ErrorMessage = ex.Message;
-
-                _logger.LogError(ex, "Publishing failed for RawEventId={Id}", raw.Id);
-            }
-
-            await _db.SaveChangesAsync(ct);
             return (true, null);
         }
         catch (Exception ex)
@@ -148,4 +58,147 @@ public class EventIngestionService : IEventIngestionService
             return (false, ex.Message);
         }
     }
+
+    // -------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------
+
+    private async Task<RawEvent> SaveRawEventAsync(JObject json, CancellationToken ct)
+    {
+        var raw = new RawEvent
+        {
+            ReceivedAt = DateTime.UtcNow,
+            RawPayload = json.ToString(Formatting.None),
+            Status = 0
+        };
+
+        _db.RawEvents.Add(raw);
+        await _db.SaveChangesAsync(ct);
+        return raw;
+    }
+
+    private async Task<Dictionary<string, string>> LoadMappingDictionaryAsync(CancellationToken ct)
+    {
+        var rules = await _mappingRepo.GetAllAsync(ct);
+        return rules.ToDictionary(r => r.ExternalName, r => r.InternalName, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private Dictionary<string, object?> MapExternalToInternalDictionary(JObject externalJson, Dictionary<string, string> map)
+    {
+        var result = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var prop in externalJson.Properties())
+        {
+            var external = prop.Name;
+            var value = prop.Value?.ToObject<object?>();
+
+            if (map.TryGetValue(external, out var internalName))
+                result[internalName] = value;
+            else
+                result[Capitalize(external)] = value;
+        }
+
+        return result;
+    }
+
+    private InternalEvent BuildInternalEvent(Dictionary<string, object?> mapped)
+    {
+        // Required: ActorId
+        var actorId = ReadRequired(mapped, "ActorId");
+
+        // Required: Amount
+        var amountStr = ReadRequired(mapped, "Amount");
+        if (!decimal.TryParse(amountStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var amount))
+            throw new Exception("Amount is not a valid decimal");
+
+        // Required: OccurredAt
+        var occurredStr = ReadRequired(mapped, "OccurredAt");
+        if (!DateTime.TryParse(occurredStr, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal, out var occurred))
+            throw new Exception("OccurredAt is not a valid datetime");
+
+        // Optional fields
+        var currency = mapped.TryGetValue("Currency", out var currObj)
+            ? currObj?.ToString() ?? "GEL"
+            : "GEL";
+
+        var eventType = mapped.TryGetValue("EventType", out var typeObj)
+            ? typeObj?.ToString()
+            : null;
+
+        var internalEvent = new InternalEvent
+        {
+            ActorId = actorId,
+            Amount = amount,
+            Currency = currency,
+            OccurredAt = occurred,
+            EventType = eventType
+        };
+
+        // Add remaining fields as ExtraFields
+        foreach (var kv in mapped)
+        {
+            if (IsStandardField(kv.Key)) continue;
+            internalEvent.ExtraFields[kv.Key] = kv.Value;
+        }
+
+        return internalEvent;
+    }
+
+    private async Task<MappedEvent> SaveMappedEventAsync(long rawId, InternalEvent model, CancellationToken ct)
+    {
+        var mapped = new MappedEvent
+        {
+            RawEventId = rawId,
+            ActorId = model.ActorId,
+            Amount = model.Amount,
+            Currency = model.Currency,
+            EventType = model.EventType,
+            OccurredAt = model.OccurredAt,
+            Payload = JsonConvert.SerializeObject(model),
+            PublishStatus = 0,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _db.MappedEvents.Add(mapped);
+        await _db.SaveChangesAsync(ct);
+
+        return mapped;
+    }
+
+    private async Task TryPublishAsync(InternalEvent evt, RawEvent raw, MappedEvent mapped, CancellationToken ct)
+    {
+        try
+        {
+            await _publisher.PublishAsync(evt, ct);
+            mapped.PublishStatus = 1;
+            raw.Status = 1;
+        }
+        catch (Exception ex)
+        {
+            mapped.PublishStatus = 2;
+            mapped.FailureReason = ex.Message;
+
+            raw.Status = 2;
+            raw.ErrorMessage = ex.Message;
+
+            _logger.LogError(ex, "Publishing failed for RawEventId={Id}", raw.Id);
+        }
+
+        await _db.SaveChangesAsync(ct);
+    }
+
+    // Small helpers
+    private string ReadRequired(Dictionary<string, object?> dict, string key)
+    {
+        if (!dict.TryGetValue(key, out var obj) || string.IsNullOrWhiteSpace(obj?.ToString()))
+            throw new Exception($"Missing required internal field: {key}");
+
+        return obj!.ToString()!;
+    }
+
+    private static bool IsStandardField(string key) =>
+        key is "ActorId" or "Amount" or "Currency" or "OccurredAt" or "EventType";
+
+    private static string Capitalize(string s) =>
+        char.ToUpper(s[0]) + s.Substring(1);
 }

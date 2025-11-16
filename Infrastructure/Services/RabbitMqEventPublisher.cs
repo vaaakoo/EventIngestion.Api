@@ -9,7 +9,11 @@ namespace EventIngestion.Api.Infrastructure.Services;
 public class RabbitMqEventPublisher : IEventPublisher
 {
     private readonly ILogger<RabbitMqEventPublisher> _logger;
-    private readonly IConfiguration _configuration;
+
+    // Cached configuration values (clean & minimal)
+    private readonly string _host;
+    private readonly string _exchange;
+
     private readonly Random _random = new();
 
     public RabbitMqEventPublisher(
@@ -17,33 +21,39 @@ public class RabbitMqEventPublisher : IEventPublisher
         IConfiguration configuration)
     {
         _logger = logger;
-        _configuration = configuration;
+
+        _host = configuration["RabbitMq:Host"] ?? "localhost";
+        _exchange = configuration["RabbitMq:Exchange"] ?? "events.exchange";
     }
 
     public async Task PublishAsync(InternalEvent internalEvent, CancellationToken ct = default)
     {
-        // Random failure simulation (e.g. 25%)
-        var dice = _random.NextDouble();
-        if (dice < 0.25)
+        // 1) Simulated failure (25%)
+        if (_random.NextDouble() < 0.25)
         {
-            _logger.LogWarning("Simulated publishing failure for event ActorId={ActorId}", internalEvent.ActorId);
+            _logger.LogWarning(
+                "Simulated RabbitMQ failure. ActorId={ActorId}, EventType={EventType}",
+                internalEvent.ActorId, internalEvent.EventType);
+
             throw new Exception("Simulated publishing failure");
         }
 
-        // რეალური RabbitMQ publish (თუ გინდა რეალურად):
-        var rabbitHost = _configuration["RabbitMq:Host"] ?? "localhost";
-        var exchangeName = _configuration["RabbitMq:Exchange"] ?? "events.exchange";
-
+        // 2) Real RabbitMQ publish (demo style)
         var factory = new ConnectionFactory
         {
-            HostName = rabbitHost
+            HostName = _host
         };
 
-        // Simple example (no pooling, for demo only)
+        // NOTE: In production you must reuse the connection / channel.
+        // Here it's clean demo: simple and disposable.
+
         using var connection = factory.CreateConnection();
         using var channel = connection.CreateModel();
 
-        channel.ExchangeDeclare(exchange: exchangeName, type: ExchangeType.Topic, durable: true);
+        channel.ExchangeDeclare(
+            exchange: _exchange,
+            type: ExchangeType.Topic,
+            durable: true);
 
         var payloadJson = JsonConvert.SerializeObject(internalEvent);
         var body = Encoding.UTF8.GetBytes(payloadJson);
@@ -51,13 +61,14 @@ public class RabbitMqEventPublisher : IEventPublisher
         var routingKey = $"events.{(internalEvent.EventType ?? "generic").ToLower()}";
 
         channel.BasicPublish(
-            exchange: exchangeName,
+            exchange: _exchange,
             routingKey: routingKey,
             basicProperties: null,
             body: body);
 
-        _logger.LogInformation("Published event to RabbitMQ. ActorId={ActorId}, RoutingKey={RoutingKey}",
-            internalEvent.ActorId, routingKey);
+        _logger.LogInformation(
+            "Published to RabbitMQ. ActorId={ActorId}, EventType={EventType}, RoutingKey={RoutingKey}",
+            internalEvent.ActorId, internalEvent.EventType, routingKey);
 
         await Task.CompletedTask;
     }

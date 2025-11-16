@@ -17,8 +17,9 @@ public class SimulationController : ControllerBase
     }
 
     /// <summary>
-    /// Publish ONE sample event (fixed template).
+    /// Publishes a single predefined sample event.
     /// </summary>
+    /// <response code="200">Event published.</response>
     [HttpPost("one")]
     public async Task<IActionResult> PublishOne(CancellationToken ct)
     {
@@ -39,8 +40,12 @@ public class SimulationController : ControllerBase
     }
 
     /// <summary>
-    /// Generate and publish 100 random external events.
+    /// Generates and publishes 100 random events.
     /// </summary>
+    /// <remarks>
+    /// Useful for load testing and failure simulation.
+    /// </remarks>
+    /// <response code="200">Batch finished with stats.</response>
     [HttpPost("batch")]
     public async Task<IActionResult> PublishBatch(CancellationToken ct)
     {
