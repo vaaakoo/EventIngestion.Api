@@ -25,7 +25,7 @@ public class EventIngestionService : IEventIngestionService
         _logger = logger;
     }
 
-    public async Task<(bool Success, string? Error)> IngestExternalEventAsync(JObject externalJson, CancellationToken ct = default)
+    public async Task<(bool Success, string Error)> IngestExternalEventAsync(JObject externalJson, CancellationToken ct)
     {
         // Step 1 — Save RAW event
         var raw = await SaveRawEventAsync(externalJson, ct);
@@ -59,10 +59,10 @@ public class EventIngestionService : IEventIngestionService
         }
     }
 
+    #region Helpers
     // -------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------
-
     private async Task<RawEvent> SaveRawEventAsync(JObject json, CancellationToken ct)
     {
         var raw = new RawEvent
@@ -201,4 +201,6 @@ public class EventIngestionService : IEventIngestionService
 
     private static string Capitalize(string s) =>
         char.ToUpper(s[0]) + s.Substring(1);
+
+    #endregion
 }

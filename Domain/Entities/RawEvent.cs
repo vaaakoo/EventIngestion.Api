@@ -4,7 +4,7 @@ public class RawEvent
 {
     public long Id { get; set; }
     public DateTime ReceivedAt { get; set; }
-    public string RawPayload { get; set; } = default!;
-    public int Status { get; set; } // 0 = Pending, 1 = Processed, 2 = Failed
-    public string? ErrorMessage { get; set; }
+    public string RawPayload { get; set; } 
+    public int Status { get; set; } 
+    public string ErrorMessage { get; set; }
 }

@@ -13,12 +13,12 @@ public class MappingRuleRepository : IMappingRuleRepository
         _db = db;
     }
 
-    public async Task<List<MappingRule>> GetAllAsync(CancellationToken ct = default)
+    public async Task<List<MappingRule>> GetAllAsync(CancellationToken ct)
     {
         return await _db.MappingRules.AsNoTracking().ToListAsync(ct);
     }
 
-    public async Task AddOrUpdateAsync(string externalName, string internalName, CancellationToken ct = default)
+    public async Task AddOrUpdateAsync(string externalName, string internalName, CancellationToken ct)
     {
         var rule = await _db.MappingRules.FirstOrDefaultAsync(x => x.ExternalName == externalName, ct);
         if (rule == null)
@@ -40,7 +40,7 @@ public class MappingRuleRepository : IMappingRuleRepository
         await _db.SaveChangesAsync(ct);
     }
 
-    public async Task RemoveAsync(string externalName, CancellationToken ct = default)
+    public async Task RemoveAsync(string externalName, CancellationToken ct)
     {
         var rule = await _db.MappingRules.FirstOrDefaultAsync(x => x.ExternalName == externalName, ct);
         if (rule != null)

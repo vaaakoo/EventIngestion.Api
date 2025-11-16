@@ -3,7 +3,7 @@
 public class MappingRule
 {
     public int Id { get; set; }
-    public string ExternalName { get; set; } = default!;
-    public string InternalName { get; set; } = default!;
+    public string ExternalName { get; set; }
+    public string InternalName { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

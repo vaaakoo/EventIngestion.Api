@@ -13,6 +13,7 @@ public class AppDbContext : DbContext
     {
     }
 
+    #region Fluent API Entity Configuration
     // Fluent API Entity Configuration
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -44,4 +45,5 @@ public class AppDbContext : DbContext
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
         });
     }
+    #endregion
 }

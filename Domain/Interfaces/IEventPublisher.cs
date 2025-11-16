@@ -4,5 +4,5 @@ namespace EventIngestion.Api.Domain.Interfaces;
 
 public interface IEventPublisher
 {
-    Task PublishAsync(InternalEvent internalEvent, CancellationToken ct = default);
+    Task PublishAsync(InternalEvent internalEvent, CancellationToken ct);
 }
