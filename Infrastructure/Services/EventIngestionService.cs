@@ -3,7 +3,6 @@ using EventIngestion.Api.Domain.Entities;
 using EventIngestion.Api.Domain.Interfaces;
 using EventIngestion.Api.Domain.Models;
 using EventIngestion.Api.Infrastructure;
-using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -30,13 +29,11 @@ public class EventIngestionService : IEventIngestionService
 
     public async Task<(bool Success, string? Error)> IngestExternalEventAsync(
         JObject externalJson,
-        string? provider,
         CancellationToken ct = default)
     {
         // 1) შევინახოთ RawEvent
         var raw = new RawEvent
         {
-            Provider = provider,
             ReceivedAt = DateTime.UtcNow,
             RawPayload = externalJson.ToString(Formatting.None),
             Status = 0

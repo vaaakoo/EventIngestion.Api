@@ -18,12 +18,6 @@ public class MappingRuleRepository : IMappingRuleRepository
         return await _db.MappingRules.AsNoTracking().ToListAsync(ct);
     }
 
-    public async Task<MappingRule?> GetByExternalNameAsync(string externalName, CancellationToken ct = default)
-    {
-        return await _db.MappingRules
-            .FirstOrDefaultAsync(x => x.ExternalName == externalName, ct);
-    }
-
     public async Task AddOrUpdateAsync(string externalName, string internalName, CancellationToken ct = default)
     {
         var rule = await _db.MappingRules.FirstOrDefaultAsync(x => x.ExternalName == externalName, ct);

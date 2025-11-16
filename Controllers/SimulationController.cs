@@ -31,7 +31,7 @@ public class SimulationController : ControllerBase
             ["etype"] = "BetPlaced"
         };
 
-        var (success, error) = await _ingestionService.IngestExternalEventAsync(sample, "DemoProvider", ct);
+        var (success, error) = await _ingestionService.IngestExternalEventAsync(sample, ct);
         if (!success)
             return BadRequest(new { Success = false, Error = error });
 
@@ -67,7 +67,7 @@ public class SimulationController : ControllerBase
                 ["etype"] = etype
             };
 
-            var (success, error) = await _ingestionService.IngestExternalEventAsync(sample, "BatchSim", ct);
+            var (success, error) = await _ingestionService.IngestExternalEventAsync(sample, ct);
             if (success)
                 successCount++;
             else

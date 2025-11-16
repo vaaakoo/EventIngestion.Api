@@ -37,10 +37,7 @@ public class EventsController : ControllerBase
             return BadRequest(new { Success = false, Error = "Invalid JSON" });
         }
 
-        var provider = Request.Headers["X-Provider"].FirstOrDefault()
-                       ?? HttpContext.Request.Query["provider"].FirstOrDefault();
-
-        var (success, error) = await _ingestionService.IngestExternalEventAsync(externalEvent, provider, ct);
+        var (success, error) = await _ingestionService.IngestExternalEventAsync(externalEvent, ct);
         if (!success)
             return BadRequest(new { Success = false, Error = error });
 
