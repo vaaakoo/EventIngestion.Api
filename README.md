@@ -229,3 +229,41 @@ For testing without external providers:
 
 ---
 
+# ⚠️ Failure Handling (Short Version)
+
+The system captures and stores all failures during event processing.
+This includes:
+
+### **1. JSON validation failure**
+
+If incoming JSON is invalid or required fields are missing, the system:
+
+* Saves the raw event in DB with `Status = 2 (Failed)`
+* Saves the error message (`ErrorMessage`)
+* Does **not** attempt publishing.
+
+### **2. RabbitMQ publishing failure**
+
+If RabbitMQ publish fails (network error, simulated failure, exchange down, etc.):
+
+* The mapped event is saved with:
+
+  * `PublishStatus = 2`
+  * `FailureReason = <exception message>`
+* The raw event is updated:
+
+  * `Status = 2`
+  * `ErrorMessage = <exception message>`
+
+**No event is ever lost.**
+All failed events remain in the database for retrying later.
+
+### **3. What gets stored**
+
+| Table            | What it stores                           |
+| ---------------- | ---------------------------------------- |
+| **RawEvents**    | Full payload + validation/publish errors |
+| **MappedEvents** | Normalized event + publish status        |
+
+---
+
