@@ -10,7 +10,7 @@ public class RabbitMqEventPublisher : IEventPublisher
 {
     private readonly ILogger<RabbitMqEventPublisher> _logger;
 
-    // Cached configuration values (clean & minimal)
+    // Cached configuration values
     private readonly string _host;
     private readonly string _exchange;
 
@@ -36,7 +36,7 @@ public class RabbitMqEventPublisher : IEventPublisher
             throw new Exception("Simulated publishing failure");
         }
 
-        // 2) Real RabbitMQ publish (demo style)
+        // 2) Real RabbitMQ publish
         var factory = new ConnectionFactory
         {
             HostName = _host

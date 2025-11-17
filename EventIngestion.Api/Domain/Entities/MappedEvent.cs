@@ -5,7 +5,6 @@ public class MappedEvent
     public long Id { get; set; }
     public long RawEventId { get; set; }
     public RawEvent RawEvent { get; set; }
-
     public string ActorId { get; set; }
     public decimal Amount { get; set; }
     public string Currency { get; set; }
