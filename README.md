@@ -9,7 +9,7 @@ A lightweight integration service that receives external JSON events, validates 
 
 ### **1. Requirements**
 
-* .NET 10 SDK
+* .NET 9 SDK
 * SQL Server (local or remote)
 * RabbitMQ (Docker or local installation)
 
