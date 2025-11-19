@@ -31,6 +31,7 @@ public class AppDbContext : DbContext
             entity.ToTable("MappedEvents");
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Payload).IsRequired();
+            entity.Property(e => e.Amount).HasPrecision(18, 2);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
             entity.HasOne(e => e.RawEvent)
                   .WithMany()
